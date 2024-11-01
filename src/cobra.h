@@ -40,7 +40,7 @@ void cobra_apply(complex double *v, int log_n) {
     size_t block_width = 1 << LOG_BLOCK_WIDTH;
 
     //complex double buffer[BLOCK_WIDTH * BLOCK_WIDTH] = {0};
-    complex double *buffer = (complex double *) calloc(BLOCK_WIDTH * BLOCK_WIDTH, sizeof(complex double));
+    complex double *buffer = (complex double *) calloc(BLOCK_WIDTH * BLOCK_WIDTH, sizeof(complex double)); //to be moved outside of this function, replace with aligned_alloc
 
     for (size_t b = 0; b < b_size; b++) {
         size_t b_rev = reverse_bits(b, num_b_bits) >> ((b_size - 1) - __builtin_clz(b_size - 1));
@@ -98,7 +98,7 @@ void cobra_apply(complex double *v, int log_n) {
 
 // Function to perform bit-reverse permutation on the signal
 void bit_reverse_permutation(complex double *signal, int N) {
-    int bits = (int)log2(N);
+    int bits = (int)log2(N); // to be replaced with frexp
     cobra_apply(signal, bits);
 }
 
