@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <complex.h>
 
-#define LOG_BLOCK_WIDTH 7  // Example block width (32)
+#define LOG_BLOCK_WIDTH 7  // Example block width (256), seemingly the fastest one (?)
 #define BLOCK_WIDTH (1 << LOG_BLOCK_WIDTH)
 
 // Helper function to reverse bits
