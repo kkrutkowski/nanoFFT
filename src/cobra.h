@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <complex.h>
 
-#define LOG_BLOCK_WIDTH 7  // Example block width (32)
+#define LOG_BLOCK_WIDTH 7  // Example block width (128)
 #define BLOCK_WIDTH (1 << LOG_BLOCK_WIDTH)
 
 // Helper function to reverse bits
