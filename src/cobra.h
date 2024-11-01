@@ -2,11 +2,10 @@
 #define COBRA_H
 
 #include <stdlib.h>
-#include <math.h>
 #include <stdint.h>
 #include <complex.h>
 
-#define LOG_BLOCK_WIDTH 7  // Example block width (256), seemingly the fastest one (?)
+#define LOG_BLOCK_WIDTH 7  // Example block width (32)
 #define BLOCK_WIDTH (1 << LOG_BLOCK_WIDTH)
 
 // Helper function to reverse bits
@@ -21,13 +20,13 @@ static inline uint32_t reverse_bits(uint32_t num, unsigned int bits) {
 }
 
 // COBRA bit-reverse algorithm implementation
-void cobra_apply(complex double *v, int log_n) {
+void cobra_apply(complex FLOAT *v, int log_n) {
     if (log_n <= 2 * LOG_BLOCK_WIDTH) {
         // Fallback to a simpler bit-reversal if log_n is small
         for (int i = 0; i < (1 << log_n); ++i) {
             int j = reverse_bits(i, log_n);
             if (j > i) {
-                complex double temp = v[i];
+                complex FLOAT temp = v[i];
                 v[i] = v[j];
                 v[j] = temp;
             }
@@ -39,8 +38,8 @@ void cobra_apply(complex double *v, int log_n) {
     size_t b_size = 1 << num_b_bits;
     size_t block_width = 1 << LOG_BLOCK_WIDTH;
 
-    //complex double buffer[BLOCK_WIDTH * BLOCK_WIDTH] = {0};
-    complex double *buffer = (complex double *) calloc(BLOCK_WIDTH * BLOCK_WIDTH, sizeof(complex double)); //to be moved outside of this function, replace with aligned_alloc
+    //complex FLOAT buffer[BLOCK_WIDTH * BLOCK_WIDTH] = {0};
+    complex FLOAT *buffer = (complex FLOAT *) calloc(BLOCK_WIDTH * BLOCK_WIDTH, sizeof(complex FLOAT));
 
     for (size_t b = 0; b < b_size; b++) {
         size_t b_rev = reverse_bits(b, num_b_bits) >> ((b_size - 1) - __builtin_clz(b_size - 1));
@@ -68,7 +67,7 @@ void cobra_apply(complex double *v, int log_n) {
                 if (index_less_than_reverse) {
                     size_t v_idx = (c_rev << num_b_bits << LOG_BLOCK_WIDTH) | (b_rev << LOG_BLOCK_WIDTH) | a_rev;
                     size_t b_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
-                    complex double temp = v[v_idx];
+                    complex FLOAT temp = v[v_idx];
                     v[v_idx] = buffer[b_idx];
                     buffer[b_idx] = temp;
                 }
@@ -87,7 +86,7 @@ void cobra_apply(complex double *v, int log_n) {
                 if (index_less_than_reverse) {
                     size_t v_idx = (a << num_b_bits << LOG_BLOCK_WIDTH) | (b << LOG_BLOCK_WIDTH) | c;
                     size_t b_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
-                    complex double temp = v[v_idx];
+                    complex FLOAT temp = v[v_idx];
                     v[v_idx] = buffer[b_idx];
                     buffer[b_idx] = temp;
                 }
@@ -97,8 +96,10 @@ void cobra_apply(complex double *v, int log_n) {
 }
 
 // Function to perform bit-reverse permutation on the signal
-void bit_reverse_permutation(complex double *signal, int N) {
-    int bits = (int)log2(N); // to be replaced with frexp
+void bit_reverse_permutation(complex FLOAT *signal, int N) {
+    int bits;
+    frexp(N, &bits);
+    bits -= 1;
     cobra_apply(signal, bits);
 }
 
