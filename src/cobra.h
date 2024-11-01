@@ -99,8 +99,7 @@ free(buffer);
 // Function to perform bit-reverse permutation on the signal
 void bit_reverse_permutation(complex FLOAT *signal, int N) {
     int bits;
-    frexp(N, &bits);
-    bits -= 1;
+    frexp(N >> 1, &bits);
     cobra_apply(signal, bits);
 }
 

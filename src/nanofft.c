@@ -10,12 +10,12 @@
 #include "./cobra.h"
 
 // Helper function to check if N is a power of two
-bool is_power_of_two(int N) {
+static inline bool is_power_of_two(int N) {
     return (N > 0) && ((N & (N - 1)) == 0);
 }
 
 
-const complex FLOAT* generate_buffer(int N){
+static inline const complex FLOAT* generate_buffer(int N){
     complex FLOAT* buffer = (complex FLOAT*) aligned_alloc(64 ,N * sizeof(complex FLOAT));;
     int shift = 0;
     for (int step = N; step > 1; step >>= 1) { // Right bit shift for division by 2
@@ -29,10 +29,10 @@ const complex FLOAT* generate_buffer(int N){
 return buffer;}
 
 
-void sande_tukey_in_place(complex FLOAT *signal, const complex FLOAT *buffer, int N) {
+static inline void sande_tukey_in_place(complex FLOAT *signal, const complex FLOAT *buffer, int N) {
     int shift = 0;
-    for (int step = N; step > 1; step >>= 1) { // Right bit shift for division by 2
-        int half_step = step >> 1; // Right bit shift for division by 2
+    for (int step = N; step > 1; step >>= 1) {
+        int half_step = step >> 1;
         for (int i = 0; i < N; i += step) {
             for (int j = 0; j < half_step; j++) {
                 complex FLOAT even = signal[i + j];
@@ -41,7 +41,7 @@ void sande_tukey_in_place(complex FLOAT *signal, const complex FLOAT *buffer, in
                 signal[i + j + half_step] = (even - odd) * buffer[shift + j]; //* cexp(-2.0 * I * M_PI * j / step);
             }
         }
-        shift += step >> 1;
+        shift += half_step;
     }
 }
 
