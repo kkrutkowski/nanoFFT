@@ -20,7 +20,7 @@ static inline uint32_t reverse_bits(uint32_t num, unsigned int bits) {
 }
 
 // COBRA bit-reverse algorithm implementation
-void cobra_apply(complex FLOAT *v, int log_n) {
+static inline void cobra_apply(complex FLOAT *v, int log_n) {
     if (log_n <= 2 * LOG_BLOCK_WIDTH) {
         // Fallback to a simpler bit-reversal if log_n is small
         for (int i = 0; i < (1 << log_n); ++i) {
@@ -38,8 +38,8 @@ void cobra_apply(complex FLOAT *v, int log_n) {
     size_t b_size = 1 << num_b_bits;
     size_t block_width = 1 << LOG_BLOCK_WIDTH;
 
-    //complex FLOAT buffer[BLOCK_WIDTH * BLOCK_WIDTH] = {0};
-    complex FLOAT *buffer = (complex FLOAT *) calloc(BLOCK_WIDTH * BLOCK_WIDTH, sizeof(complex FLOAT));
+    complex FLOAT *buffer = (complex FLOAT *) aligned_alloc(64, BLOCK_WIDTH * BLOCK_WIDTH * sizeof(complex FLOAT));
+    //for (size_t i = 0; i < BLOCK_WIDTH * BLOCK_WIDTH ; i++){buffer[i] = 0;} // does literally nothing?
 
     for (size_t b = 0; b < b_size; b++) {
         size_t b_rev = reverse_bits(b, num_b_bits) >> ((b_size - 1) - __builtin_clz(b_size - 1));
@@ -93,6 +93,7 @@ void cobra_apply(complex FLOAT *v, int log_n) {
             }
         }
     }
+free(buffer);
 }
 
 // Function to perform bit-reverse permutation on the signal

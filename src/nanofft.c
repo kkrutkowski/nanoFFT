@@ -1,6 +1,7 @@
 #define FLOAT float
 
 #include <math.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -15,7 +16,7 @@ bool is_power_of_two(int N) {
 
 
 const complex FLOAT* generate_buffer(int N){
-    complex FLOAT* buffer = (complex FLOAT*) malloc(N * sizeof(complex FLOAT));
+    complex FLOAT* buffer = (complex FLOAT*) aligned_alloc(64 ,N * sizeof(complex FLOAT));;
     int shift = 0;
     for (int step = N; step > 1; step >>= 1) { // Right bit shift for division by 2
         int half_step = step >> 1; // Right bit shift for division by 2
@@ -42,4 +43,13 @@ void sande_tukey_in_place(complex FLOAT *signal, const complex FLOAT *buffer, in
         }
         shift += step >> 1;
     }
+}
+
+void sande_tukey_fft(complex FLOAT *signal, const complex FLOAT* buffer, int N) {
+    if ((N & (N - 1)) != 0) {
+        fprintf(stderr, "Signal length must be a power of 2\n");
+        exit(EXIT_FAILURE);
+    }
+    sande_tukey_in_place(signal, buffer, N);
+    bit_reverse_permutation(signal, N);
 }
