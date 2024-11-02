@@ -4,9 +4,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 
 #define LOG_BLOCK_WIDTH 7  // Example block width (32)
 #define BLOCK_WIDTH (1 << LOG_BLOCK_WIDTH)
+
+static inline uint32_t intlog2(uint32_t input){uint32_t output; frexp(input >> 1, (int*) &output); return output;}
 
 // Precomputed lookup table for reversing 8 bits
 static const uint8_t bit_reverse_table[256] ={
@@ -134,10 +137,6 @@ static inline void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) {
 }
 
 // Function to perform bit-reverse permutation on separate real and imaginary arrays
-void bit_reverse_permutation(FLOAT *real, FLOAT *imag, uint32_t N) {
-    int bits;
-    frexp(N >> 1, &bits);
-    cobra_apply(real, imag, bits);
-}
+inline static void bit_reverse_permutation(FLOAT *real, FLOAT *imag, uint32_t N) {cobra_apply(real, imag, intlog2(N));}
 
 #endif

@@ -55,6 +55,8 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
 
 #ifdef VEC
     #define VEC_LEN (sizeof(VEC) / sizeof(FLOAT))
+#else
+    #define VEC_LEN UINT32_MAX
 #endif
 
 #ifndef VEC
@@ -141,7 +143,6 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
 }
 #endif
 
-
 void generate_buffer(uint32_t N, FLOAT *real_buffer, FLOAT *imag_buffer) {
     uint32_t shift = 0;
     for (uint32_t step = N; step > 1; step >>= 1) {
@@ -155,7 +156,7 @@ void generate_buffer(uint32_t N, FLOAT *real_buffer, FLOAT *imag_buffer) {
     }
 }
 
-void sande_tukey_fft(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, uint32_t N) {
+void nanofft_execute(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, uint32_t N) {
     if ((N & (N - 1)) != 0) {
         fprintf(stderr, "Signal length must be a power of 2\n");
         exit(EXIT_FAILURE);
