@@ -83,7 +83,6 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
         shift += half_step;
     }
 }
-
 #else
 
 void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, int N) {
@@ -155,7 +154,7 @@ void generate_buffer(int N, FLOAT *real_buffer, FLOAT *imag_buffer) {
     }
 }
 
-void sande_tukey_fft(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, int N) {
+void nanofft_execute(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, int N) {
     if ((N & (N - 1)) != 0) {
         fprintf(stderr, "Signal length must be a power of 2\n");
         exit(EXIT_FAILURE);
