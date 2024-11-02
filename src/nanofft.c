@@ -13,8 +13,7 @@
 #include "./cobra.h"
 
 static inline bool is_power_of_two(int N) {return (N > 0) && ((N & (N - 1)) == 0);}
-static inline int intmin(int a, int b) {return (a < b) ? a : b;}
-
+static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
 
 #ifndef DOUBLE // Single precision
     #ifdef __AVX__
@@ -83,14 +82,15 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
         shift += half_step;
     }
 }
+
 #else
 
-void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, int N) {
-    int shift = 0;
-    for (int step = N; step > VEC_LEN; step >>= 1) { // Right bit shift for division by 2
-        int half_step = step >> 1; // Right bit shift for division by 2
-        for (int i = 0; i < N; i += step) {
-            for (int j = 0; j < half_step; j += VEC_LEN) {
+void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, uint32_t N) {
+    uint32_t shift = 0;
+    for (uint32_t step = N; step > VEC_LEN; step >>= 1) { // Right bit shift for division by 2
+        uint32_t half_step = step >> 1; // Right bit shift for division by 2
+        for (uint32_t i = 0; i < N; i += step) {
+            for (uint32_t j = 0; j < half_step; j += VEC_LEN) {
                 // Load data into VEC variables
                 VEC real_even = LOAD_VEC(&real_signal[i + j]);
                 VEC imag_even = LOAD_VEC(&imag_signal[i + j]);
@@ -114,11 +114,11 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
             }
         }
         shift += half_step;
-    }
-        for (int step = intmin(VEC_LEN, N); step > 1; step >>= 1) { // Right bit shift for division by 2
-        int half_step = step >> 1; // Right bit shift for division by 2
-        for (int i = 0; i < N; i += step) {
-            for (int j = 0; j < half_step; j++) {
+    } //*
+        for (uint32_t step = intmin(VEC_LEN, N); step > 1; step >>= 1) { // Required addition of SIMD secondary loop to reach reasonable performance levels
+        uint32_t half_step = step >> 1;
+        for (uint32_t i = 0; i < N; i += step) {
+            for (uint32_t j = 0; j < half_step; j++) {
                 FLOAT real_even = real_signal[i + j];
                 FLOAT imag_even = imag_signal[i + j];
                 FLOAT real_odd = real_signal[i + j + half_step];
@@ -137,15 +137,16 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
         }
         shift += half_step;
     }
+    //*/
 }
 #endif
 
 
-void generate_buffer(int N, FLOAT *real_buffer, FLOAT *imag_buffer) {
-    int shift = 0;
-    for (int step = N; step > 1; step >>= 1) {
-        int half_step = step >> 1;
-        for (int j = 0; j < half_step; j++) {
+void generate_buffer(uint32_t N, FLOAT *real_buffer, FLOAT *imag_buffer) {
+    uint32_t shift = 0;
+    for (uint32_t step = N; step > 1; step >>= 1) {
+        uint32_t half_step = step >> 1;
+        for (uint32_t j = 0; j < half_step; j++) {
             FLOAT angle = -2.0 * M_PI * j / step;
             real_buffer[shift + j] = cos(angle);
             imag_buffer[shift + j] = sin(angle);
@@ -154,7 +155,7 @@ void generate_buffer(int N, FLOAT *real_buffer, FLOAT *imag_buffer) {
     }
 }
 
-void nanofft_execute(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, int N) {
+void sande_tukey_fft(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, uint32_t N) {
     if ((N & (N - 1)) != 0) {
         fprintf(stderr, "Signal length must be a power of 2\n");
         exit(EXIT_FAILURE);
