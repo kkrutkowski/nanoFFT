@@ -5,8 +5,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <stdbool.h>
+#include <stdio.h>
 
-#define LOG_BLOCK_WIDTH 1  // Example block width (32)
+#define LOG_BLOCK_WIDTH 7  // Example block width (1024)
 #define BLOCK_WIDTH (1 << LOG_BLOCK_WIDTH)
 
 static inline uint32_t intlog2(uint32_t input){uint32_t output; frexp(input >> 1, (int*) &output); return output;}
@@ -38,7 +40,7 @@ static inline uint32_t reverse_bits(uint32_t num, uint32_t bits) {
     return result;
 }
 
-static inline void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) { //doesn't work'
+static inline void table_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) { //doesn't work'
         // Fallback to a simpler bit-reversal if log_n is small
         for (int i = 0; i < (1 << log_n); ++i) {
             int j = reverse_bits(i, log_n);
@@ -56,106 +58,92 @@ static inline void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) { //doe
         }
 return;}
 
-/* // uncomment when fixed
+ // uncomment when fixed
 // COBRA bit-reverse algorithm implementation for separate real and imaginary arrays
-static inline void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) { //doesn't work'
-    //if (log_n <= 2 * LOG_BLOCK_WIDTH) {
+void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) {
     if (log_n <= 2 * LOG_BLOCK_WIDTH) {
-        // Fallback to a simpler bit-reversal if log_n is small
-        for (int i = 0; i < (1 << log_n); ++i) {
-            int j = reverse_bits(i, log_n);
-            if (j > i) {
-                // Swap real parts
-                FLOAT temp_real = real[i];
-                FLOAT temp_imag = imag[i];
-
-                real[i] = real[j];
-                imag[i] = imag[j];
-
-                real[j] = temp_real;
-                imag[j] = temp_imag;
-            }
-        }
+        // Call a simple bit reversal function for small cases
+        //printf("Falling back to the table shuffle"); //works, COBRA fixed
+        table_shuffle(real, imag, log_n);
         return;
     }
 
-    int num_b_bits = log_n - 2 * LOG_BLOCK_WIDTH;
-    size_t b_size = 1 << num_b_bits;
-    size_t block_width = 1 << LOG_BLOCK_WIDTH;
+    uint32_t num_b_bits = log_n - 2 * LOG_BLOCK_WIDTH;
+    uint32_t b_size = 1 << num_b_bits;
+    uint32_t block_width = BLOCK_WIDTH;
 
-    FLOAT *buffer_real = (FLOAT *)aligned_alloc(64, BLOCK_WIDTH * BLOCK_WIDTH * sizeof(FLOAT));
-    FLOAT *buffer_imag = (FLOAT *)aligned_alloc(64, BLOCK_WIDTH * BLOCK_WIDTH * sizeof(FLOAT));
+    FLOAT buffer_real[BLOCK_WIDTH * BLOCK_WIDTH];
+    FLOAT buffer_imag[BLOCK_WIDTH * BLOCK_WIDTH];
+    memset(buffer_real, 0, sizeof(buffer_real));
+    memset(buffer_imag, 0, sizeof(buffer_imag));
 
-    for (size_t b = 0; b < b_size; b++) {
-        size_t b_rev = reverse_bits(b, num_b_bits) >> ((b_size - 1) - __builtin_clz(b_size - 1));
+    for (uint32_t b = 0; b < b_size; ++b) {
+        uint32_t b_rev = reverse_bits(b, num_b_bits);
 
         // Copy block to buffer
-        for (size_t a = 0; a < block_width; a++) {
-            size_t a_rev = reverse_bits(a, LOG_BLOCK_WIDTH) >> ((block_width - 1) - __builtin_clz(block_width - 1));
-            for (size_t c = 0; c < BLOCK_WIDTH; c++) {
-                size_t idx = (a << num_b_bits << LOG_BLOCK_WIDTH) | (b << LOG_BLOCK_WIDTH) | c;
-                size_t buffer_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
-
+        for (uint32_t a = 0; a < block_width; ++a) {
+            uint32_t a_rev = reverse_bits(a, LOG_BLOCK_WIDTH);
+            for (uint32_t c = 0; c < BLOCK_WIDTH; ++c) {
+                uint32_t idx = (a << num_b_bits << LOG_BLOCK_WIDTH) | (b << LOG_BLOCK_WIDTH) | c;
+                uint32_t buffer_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
                 buffer_real[buffer_idx] = real[idx];
                 buffer_imag[buffer_idx] = imag[idx];
             }
         }
 
-        for (size_t c = 0; c < BLOCK_WIDTH; c++) {
-            size_t c_rev = reverse_bits(c, LOG_BLOCK_WIDTH) >> ((block_width - 1) - __builtin_clz(block_width - 1));
+        for (uint32_t c = 0; c < BLOCK_WIDTH; ++c) {
+            uint32_t c_rev = reverse_bits(c, LOG_BLOCK_WIDTH);
 
-            for (size_t a_rev = 0; a_rev < BLOCK_WIDTH; a_rev++) {
-                size_t a = reverse_bits(a_rev, LOG_BLOCK_WIDTH) >> ((block_width - 1) - __builtin_clz(block_width - 1));
+            for (uint32_t a_rev = 0; a_rev < BLOCK_WIDTH; ++a_rev) {
+                uint32_t a = reverse_bits(a_rev, LOG_BLOCK_WIDTH);
 
-                // Check the condition to swap
-                int index_less_than_reverse = a < c_rev
-                    || (a == c_rev && b < b_rev)
-                    || (a == c_rev && b == b_rev && a_rev < c);
+                bool index_less_than_reverse = (a < c_rev) ||
+                                               (a == c_rev && b < b_rev) ||
+                                               (a == c_rev && b == b_rev && a_rev < c);
 
                 if (index_less_than_reverse) {
-                    size_t v_idx = (c_rev << num_b_bits << LOG_BLOCK_WIDTH) | (b_rev << LOG_BLOCK_WIDTH) | a_rev;
-                    size_t b_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
+                    uint32_t v_idx = (c_rev << num_b_bits << LOG_BLOCK_WIDTH) | (b_rev << LOG_BLOCK_WIDTH) | a_rev;
+                    uint32_t b_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
 
-                    // Swap real parts
                     FLOAT temp_real = real[v_idx];
                     FLOAT temp_imag = imag[v_idx];
+
                     real[v_idx] = buffer_real[b_idx];
                     imag[v_idx] = buffer_imag[b_idx];
+
                     buffer_real[b_idx] = temp_real;
                     buffer_imag[b_idx] = temp_imag;
                 }
             }
         }
 
-        // Copy changes that were swapped into buffer
-        for (size_t a = 0; a < BLOCK_WIDTH; a++) {
-            size_t a_rev = reverse_bits(a, LOG_BLOCK_WIDTH) >> ((block_width - 1) - __builtin_clz(block_width - 1));
-            for (size_t c = 0; c < BLOCK_WIDTH; c++) {
-                size_t c_rev = reverse_bits(c, LOG_BLOCK_WIDTH) >> ((block_width - 1) - __builtin_clz(block_width - 1));
-                int index_less_than_reverse = a < c_rev
-                    || (a == c_rev && b < b_rev)
-                    || (a == c_rev && b == b_rev && a_rev < c);
+        // Copy changes that were swapped into buffer above
+        for (uint32_t a = 0; a < BLOCK_WIDTH; ++a) {
+            uint32_t a_rev = reverse_bits(a, LOG_BLOCK_WIDTH);
+            for (uint32_t c = 0; c < BLOCK_WIDTH; ++c) {
+                uint32_t c_rev = reverse_bits(c, LOG_BLOCK_WIDTH);
+
+                bool index_less_than_reverse = (a < c_rev) ||
+                                               (a == c_rev && b < b_rev) ||
+                                               (a == c_rev && b == b_rev && a_rev < c);
 
                 if (index_less_than_reverse) {
-                    size_t v_idx = (a << num_b_bits << LOG_BLOCK_WIDTH) | (b << LOG_BLOCK_WIDTH) | c;
-                    size_t b_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
+                    uint32_t v_idx = (a << num_b_bits << LOG_BLOCK_WIDTH) | (b << LOG_BLOCK_WIDTH) | c;
+                    uint32_t b_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
 
-                    // Swap real parts
                     FLOAT temp_real = real[v_idx];
                     FLOAT temp_imag = imag[v_idx];
+
                     real[v_idx] = buffer_real[b_idx];
                     imag[v_idx] = buffer_imag[b_idx];
+
                     buffer_real[b_idx] = temp_real;
                     buffer_imag[b_idx] = temp_imag;
                 }
             }
         }
     }
-
-    free(buffer_real);
-    free(buffer_imag);
 }
-*/
 
 // Function to perform bit-reverse permutation on separate real and imaginary arrays
 inline static void bit_reverse_permutation(FLOAT *real, FLOAT *imag, uint32_t N) {cobra_apply(real, imag, intlog2(N));}
