@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define LOG_BLOCK_WIDTH 7  // Example block width (1024)
+#define LOG_BLOCK_WIDTH 6  // Example block width (64)
 #define BLOCK_WIDTH (1 << LOG_BLOCK_WIDTH)
 
 static inline uint32_t intlog2(uint32_t input){uint32_t output; frexp(input >> 1, (int*) &output); return output;}
@@ -72,10 +72,9 @@ void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) {
     uint32_t b_size = 1 << num_b_bits;
     uint32_t block_width = BLOCK_WIDTH;
 
-    FLOAT buffer_real[BLOCK_WIDTH * BLOCK_WIDTH];
-    FLOAT buffer_imag[BLOCK_WIDTH * BLOCK_WIDTH];
-    memset(buffer_real, 0, sizeof(buffer_real));
-    memset(buffer_imag, 0, sizeof(buffer_imag));
+    FLOAT* buffer_real = (FLOAT*) aligned_alloc(64, BLOCK_WIDTH * BLOCK_WIDTH * sizeof(FLOAT));
+    FLOAT* buffer_imag = (FLOAT*) aligned_alloc(64, BLOCK_WIDTH * BLOCK_WIDTH * sizeof(FLOAT));
+    //memset(buffer_real, 0, sizeof(buffer_real)); memset(buffer_imag, 0, sizeof(buffer_imag)); //redundant  (?). Leaving just in case.
 
     for (uint32_t b = 0; b < b_size; ++b) {
         uint32_t b_rev = reverse_bits(b, num_b_bits);
