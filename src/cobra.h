@@ -6,7 +6,7 @@
 #include <string.h>
 #include <math.h>
 
-#define LOG_BLOCK_WIDTH 7  // Example block width (32)
+#define LOG_BLOCK_WIDTH 1  // Example block width (32)
 #define BLOCK_WIDTH (1 << LOG_BLOCK_WIDTH)
 
 static inline uint32_t intlog2(uint32_t input){uint32_t output; frexp(input >> 1, (int*) &output); return output;}
@@ -38,8 +38,28 @@ static inline uint32_t reverse_bits(uint32_t num, uint32_t bits) {
     return result;
 }
 
+static inline void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) { //doesn't work'
+        // Fallback to a simpler bit-reversal if log_n is small
+        for (int i = 0; i < (1 << log_n); ++i) {
+            int j = reverse_bits(i, log_n);
+            if (j > i) {
+                // Swap real parts
+                FLOAT temp_real = real[i];
+                FLOAT temp_imag = imag[i];
+
+                real[i] = real[j];
+                imag[i] = imag[j];
+
+                real[j] = temp_real;
+                imag[j] = temp_imag;
+            }
+        }
+return;}
+
+/* // uncomment when fixed
 // COBRA bit-reverse algorithm implementation for separate real and imaginary arrays
-static inline void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) {
+static inline void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) { //doesn't work'
+    //if (log_n <= 2 * LOG_BLOCK_WIDTH) {
     if (log_n <= 2 * LOG_BLOCK_WIDTH) {
         // Fallback to a simpler bit-reversal if log_n is small
         for (int i = 0; i < (1 << log_n); ++i) {
@@ -135,6 +155,7 @@ static inline void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) {
     free(buffer_real);
     free(buffer_imag);
 }
+*/
 
 // Function to perform bit-reverse permutation on separate real and imaginary arrays
 inline static void bit_reverse_permutation(FLOAT *real, FLOAT *imag, uint32_t N) {cobra_apply(real, imag, intlog2(N));}
