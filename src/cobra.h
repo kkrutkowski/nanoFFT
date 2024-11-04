@@ -60,13 +60,7 @@ return;}
 
  // uncomment when fixed
 // COBRA bit-reverse algorithm implementation for separate real and imaginary arrays
-void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) {
-    if (log_n <= 2 * LOG_BLOCK_WIDTH) {
-        // Call a simple bit reversal function for small cases
-        //printf("Falling back to the table shuffle"); //works, COBRA fixed
-        table_shuffle(real, imag, log_n);
-        return;
-    }
+static inline void cobra_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
 
     uint32_t num_b_bits = log_n - 2 * LOG_BLOCK_WIDTH;
     uint32_t b_size = 1 << num_b_bits;
@@ -144,7 +138,11 @@ void cobra_apply(FLOAT *real, FLOAT *imag, uint32_t log_n) {
     }
 }
 
-// Function to perform bit-reverse permutation on separate real and imaginary arrays
-inline static void bit_reverse_permutation(FLOAT *real, FLOAT *imag, uint32_t N) {cobra_apply(real, imag, intlog2(N));}
+// Function to perform bit-reverse permutation on the output
+inline static void bit_reverse_permutation(FLOAT *real, FLOAT *imag, uint32_t N) {
+    uint32_t order = intlog2(N);
+    if (order <= 2 * LOG_BLOCK_WIDTH) {table_shuffle(real, imag, order);}
+    else {cobra_shuffle(real, imag, order);}
+}
 
 #endif

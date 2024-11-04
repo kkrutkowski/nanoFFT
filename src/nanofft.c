@@ -16,7 +16,15 @@ static inline bool is_power_of_two(int N) {return (N > 0) && ((N & (N - 1)) == 0
 static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
 
 #ifndef DOUBLE // Single precision
-    #ifdef __AVX__
+    #ifdef __AVX512F__
+        #include <immintrin.h>
+        #define VEC __m512
+        #define LOAD_VEC _mm512_load_ps
+        #define STORE_VEC _mm512_store_ps
+        #define ADD_VEC _mm512_add_ps
+        #define SUB_VEC _mm512_sub_ps
+        #define MUL_VEC _mm512_mul_ps
+    #elif defined(__AVX__)
         #include <immintrin.h>
         #define VEC __m256
         #define LOAD_VEC _mm256_load_ps
@@ -37,7 +45,15 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
         #define MUL_VEC _mm_mul_ps
     #endif
 #else // double precision vectors
-    #ifdef __AVX__
+    #ifdef __AVX512F__
+        #include <immintrin.h>
+        #define VEC __m512d
+        #define LOAD_VEC _mm512_load_pd
+        #define STORE_VEC _mm512_store_pd
+        #define ADD_VEC _mm512_add_pd
+        #define SUB_VEC _mm512_sub_pd
+        #define MUL_VEC _mm512_mul_pd
+    #elif defined(__AVX__)
         #include <immintrin.h>
         #define VEC __m256d
         #define LOAD_VEC _mm256_load_pd
