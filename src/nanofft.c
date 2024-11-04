@@ -24,6 +24,9 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
         #define ADD_VEC _mm256_add_ps
         #define SUB_VEC _mm256_sub_ps
         #define MUL_VEC _mm256_mul_ps
+            #ifdef __AVX2__
+                #define LOADPERM_VEC _mm256_load_perm_ps
+            #endif
     #elif defined(__SSE__)
         #include <xmmintrin.h>
         #define VEC __m128
@@ -42,6 +45,9 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
         #define ADD_VEC _mm256_add_pd
         #define SUB_VEC _mm256_sub_pd
         #define MUL_VEC _mm256_mul_pd
+            #ifdef __AVX2__
+                #define LOADPERM_VEC _mm256_load_perm_pd
+            #endif
     #elif defined(__SSE__)
         #include <xmmintrin.h>
         #define VEC __m128d
