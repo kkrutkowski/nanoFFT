@@ -75,42 +75,17 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
     #endif
 #endif
 
+// #undef VEC //used to test the generic version, comment for release version
+
 #ifdef VEC
     #define VEC_LEN (sizeof(VEC) / sizeof(FLOAT))
 #else
     #define VEC_LEN UINT32_MAX
 #endif
 
-#ifndef VEC
-void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, int N) {
-    int shift = 0;
-    for (int step = N; step > 1; step >>= 1) {
-        int half_step = step >> 1;
-        for (int i = 0; i < N; i += step) {
-            for (int j = 0; j < half_step; j++) {
-                FLOAT real_even = real_signal[i + j];
-                FLOAT imag_even = imag_signal[i + j];
-                FLOAT real_odd = real_signal[i + j + half_step];
-                FLOAT imag_odd = imag_signal[i + j + half_step];
-
-                real_signal[i + j] = real_even + real_odd;
-                imag_signal[i + j] = imag_even + imag_odd;
-
-                FLOAT real_temp = real_even - real_odd;
-                FLOAT imag_temp = imag_even - imag_odd;
-
-                real_signal[i + j + half_step] = real_temp * real_buffer[shift + j] - imag_temp * imag_buffer[shift + j];
-                imag_signal[i + j + half_step] = real_temp * imag_buffer[shift + j] + imag_temp * real_buffer[shift + j];
-            }
-        }
-        shift += half_step;
-    }
-}
-
-#else
-
 void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, uint32_t N) {
     uint32_t shift = 0;
+    #ifdef VEC //vectorized main loop of the FFT
     for (uint32_t step = N; step > VEC_LEN; step >>= 1) { // Right bit shift for division by 2
         uint32_t half_step = step >> 1; // Right bit shift for division by 2
         for (uint32_t i = 0; i < N; i += step) {
@@ -139,6 +114,7 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
         }
         shift += half_step;
     } //*
+    #endif
         for (uint32_t step = intmin(VEC_LEN, N); step > 1; step >>= 1) { // Required addition of SIMD secondary loop to reach reasonable performance levels
         uint32_t half_step = step >> 1;
         for (uint32_t i = 0; i < N; i += step) {
@@ -161,9 +137,8 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
         }
         shift += half_step;
     }
-    //*/
+    //*/ //add the vectorized finalization here
 }
-#endif
 
 void generate_buffer(uint32_t N, FLOAT *real_buffer, FLOAT *imag_buffer) {
     uint32_t shift = 0;
@@ -179,10 +154,7 @@ void generate_buffer(uint32_t N, FLOAT *real_buffer, FLOAT *imag_buffer) {
 }
 
 void nanofft_execute(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, uint32_t N) {
-    if ((N & (N - 1)) != 0) {
-        fprintf(stderr, "Signal length must be a power of 2\n");
-        exit(EXIT_FAILURE);
-    }
+    if ((N & (N - 1)) != 0) {fprintf(stderr, "Signal length must be a power of 2\n"); exit(EXIT_FAILURE);}
     sande_tukey_in_place(real_signal, imag_signal, real_buffer, imag_buffer, N);
     bit_reverse_permutation(real_signal, imag_signal, N);
 }

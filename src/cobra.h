@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define LOG_BLOCK_WIDTH 6  // Example block width (64)
+#define LOG_BLOCK_WIDTH 6 // Recommended block width for x86 (64 byte cashe line)
 #define BLOCK_WIDTH (1 << LOG_BLOCK_WIDTH)
 
 static inline uint32_t intlog2(uint32_t input){uint32_t output; frexp(input >> 1, (int*) &output); return output;}
@@ -58,7 +58,6 @@ static inline void table_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) { //d
         }
 return;}
 
- // uncomment when fixed
 // COBRA bit-reverse algorithm implementation for separate real and imaginary arrays
 static inline void cobra_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
 
@@ -68,7 +67,7 @@ static inline void cobra_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
 
     FLOAT* buffer_real = (FLOAT*) aligned_alloc(64, BLOCK_WIDTH * BLOCK_WIDTH * sizeof(FLOAT));
     FLOAT* buffer_imag = (FLOAT*) aligned_alloc(64, BLOCK_WIDTH * BLOCK_WIDTH * sizeof(FLOAT));
-    //memset(buffer_real, 0, sizeof(buffer_real)); memset(buffer_imag, 0, sizeof(buffer_imag)); //redundant  (?). Leaving just in case.
+    //memset(buffer_real, 0, sizeof(buffer_real)); memset(buffer_imag, 0, sizeof(buffer_imag)); //redundant (?). Leaving as a comment just in case.
 
     for (uint32_t b = 0; b < b_size; ++b) {
         uint32_t b_rev = reverse_bits(b, num_b_bits);
