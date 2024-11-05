@@ -39,15 +39,15 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
                     {.i = {0, 1, 2, 3, 4, 5, 6, 7}},
                     {.i = {0, 1, 4, 5, 2, 3, 6, 7}},
                     {.i = {7, 5, 4, 1, 6, 4, 2, 0}}};
-                static inline void _mm256_shuffle(__m256 *a, __m256 *b){
+                static inline void nanofft_mm256_shuffle(__m256 *a, __m256 *b){
                     __m256 tmp = _mm256_set_m128(_mm256_extractf128_ps(*b, 0), _mm256_extractf128_ps(*a, 0));
                     *b = _mm256_set_m128(_mm256_extractf128_ps(*b, 1), _mm256_extractf128_ps(*a, 1));
                     *a = tmp;}
-                static inline void _mm256_perm(__m256 *a, __m256 *b, uint32_t idx){
+                static inline void nanofft_mm256_perm(__m256 *a, __m256 *b, uint32_t idx){
                     *a = _mm256_permutevar8x32_ps(*a, permutations[idx].m256i);
                     *b = _mm256_permutevar8x32_ps(*b, permutations[idx].m256i);}
-                #define PERM_VEC _mm256_perm
-                #define SHUFFLE_VEC _mm256_shuffle
+                #define PERM_VEC nanofft_mm256_perm
+                #define SHUFFLE_VEC nanofft_mm256_shuffle
             #endif
     #elif defined(__SSE__)
         #include <xmmintrin.h>
