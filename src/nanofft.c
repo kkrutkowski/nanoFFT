@@ -42,9 +42,19 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
                     *b = _mm256_permutevar8x32_ps(*b, permutations[idx]);
                     __m256 tmp = _mm256_set_m128(_mm256_extractf128_ps(*b, 0), _mm256_extractf128_ps(*a, 0));
                     *b = _mm256_set_m128(_mm256_extractf128_ps(*b, 1), _mm256_extractf128_ps(*a, 1));
+                    *a = tmp;}
+                static inline void _mm256_inv_perm_ps(__m256 *a, __m256 *b, uint32_t idx){
+                    const __m256i permutations[3] = {    // Permutation keys
+                    _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0),    // Identity
+                    _mm256_set_epi32(7, 6, 3, 2, 5, 4, 1, 0),    // Second permutation
+                    _mm256_set_epi32(7, 5, 4, 1, 6, 4, 2, 0)};    // Third permutation
+                    __m256 tmp = _mm256_set_m128(_mm256_extractf128_ps(*b, 0), _mm256_extractf128_ps(*a, 0));
+                    *b = _mm256_set_m128(_mm256_extractf128_ps(*b, 1), _mm256_extractf128_ps(*a, 1));
                     *a = tmp;
-                }
+                    *a = _mm256_permutevar8x32_ps(*a, permutations[idx]);
+                    *b = _mm256_permutevar8x32_ps(*b, permutations[idx]);}
                 #define PERM_VEC _mm256_perm_ps
+                #define INV_PERM_VEC _mm256_inv_perm_ps
             #endif
     #elif defined(__SSE__)
         #include <xmmintrin.h>
