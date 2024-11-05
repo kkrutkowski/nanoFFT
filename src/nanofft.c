@@ -39,6 +39,10 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
                     {.i = {0, 1, 2, 3, 4, 5, 6, 7}},
                     {.i = {0, 1, 4, 5, 2, 3, 6, 7}},
                     {.i = {7, 5, 4, 1, 6, 4, 2, 0}}};
+
+                    typedef union {__m256 m256; float i[8];} m256_union;
+                    // Finalization twiddles
+
                 static inline void nanofft_mm256_shuffle(__m256 *a, __m256 *b){
                     __m256 tmp = _mm256_set_m128(_mm256_extractf128_ps(*b, 0), _mm256_extractf128_ps(*a, 0));
                     *b = _mm256_set_m128(_mm256_extractf128_ps(*b, 1), _mm256_extractf128_ps(*a, 1));
