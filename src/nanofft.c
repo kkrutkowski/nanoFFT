@@ -33,11 +33,11 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
         #define SUB_VEC _mm256_sub_ps
         #define MUL_VEC _mm256_mul_ps
             #ifdef __AVX2__
-                static incline void _mm256_perm_ps(__m256 *a, __m256 *b, uint32_t idx){
-                    const __m256i permutations[3];    // Permutation keys
-                    permutations[0] = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);    // Identity
-                    permutations[1] = _mm256_set_epi32(7, 6, 3, 2, 5, 4, 1, 0);    // Second permutation
-                    permutations[2] = _mm256_set_epi32(7, 5, 4, 1, 6, 4, 2, 0);    // Third permutation
+                static inline void _mm256_perm_ps(__m256 *a, __m256 *b, uint32_t idx){
+                    const __m256i permutations[3] = {    // Permutation keys
+                    _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0),    // Identity
+                    _mm256_set_epi32(7, 6, 3, 2, 5, 4, 1, 0),    // Second permutation
+                    _mm256_set_epi32(7, 5, 4, 1, 6, 4, 2, 0)};    // Third permutation
                     *a = _mm256_permutevar8x32_ps(*a, permutations[idx]);
                     *b = _mm256_permutevar8x32_ps(*b, permutations[idx]);
                     __m256 tmp = _mm256_set_m128(_mm256_extractf128_ps(*b, 0), _mm256_extractf128_ps(*a, 0));
