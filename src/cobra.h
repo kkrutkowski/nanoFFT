@@ -40,12 +40,10 @@ static inline uint32_t reverse_bits(uint32_t num, uint32_t bits) {
     return result;
 }
 
-static inline void table_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) { //doesn't work'
-        // Fallback to a simpler bit-reversal if log_n is small
+static inline void table_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
         for (int i = 0; i < (1 << log_n); ++i) {
             int j = reverse_bits(i, log_n);
             if (j > i) {
-                // Swap real parts
                 FLOAT temp_real = real[i];
                 FLOAT temp_imag = imag[i];
 
@@ -135,6 +133,8 @@ static inline void cobra_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
             }
         }
     }
+free(buffer_real);
+free(buffer_imag);
 }
 
 // Function to perform bit-reverse permutation on the output
