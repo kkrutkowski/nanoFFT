@@ -133,8 +133,7 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
                 VEC buffer_imag = LOAD_VEC(&imag_buffer[shift + j]);
 
                 // Update real_signal and imag_signal
-                STORE_VEC(&real_signal[i + j + half_step],
-                SUB_VEC(MUL_VEC(real_temp, buffer_real),MUL_VEC(imag_temp, buffer_imag)));
+                STORE_VEC(&real_signal[i + j + half_step], SUB_VEC(MUL_VEC(real_temp, buffer_real),MUL_VEC(imag_temp, buffer_imag)));
                 STORE_VEC(&imag_signal[i + j + half_step], ADD_VEC(MUL_VEC(real_temp, buffer_imag), MUL_VEC(imag_temp, buffer_real)));
             }
         }
