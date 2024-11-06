@@ -133,8 +133,7 @@ static inline void cobra_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
             }
         }
     }
-free(buffer_real);
-free(buffer_imag);
+free(buffer_real); free(buffer_imag);
 }
 
 // Function to perform bit-reverse permutation on the output
