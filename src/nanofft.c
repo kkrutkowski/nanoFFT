@@ -14,6 +14,7 @@
 
 static inline bool is_power_of_two(int N) {return (N > 0) && ((N & (N - 1)) == 0);}
 static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
+static inline uint32_t intmax(uint32_t a, uint32_t b) {return (a > b) ? a : b;}
 
 #ifndef DOUBLE // Single precision
     #ifdef __AVX512F__
@@ -33,20 +34,25 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
         #define SUB_VEC _mm256_sub_ps
         #define MUL_VEC _mm256_mul_ps
             #ifdef __AVX2__
-                    typedef union {__m256i m256i; int32_t i[8];} m256i_union;
-                    // Permutation keys
-                    static const m256i_union permutations[3] __attribute__((aligned(64))) = {
+                typedef union {__m256i m256i; uint32_t i[8];} m256i_union;
+                typedef union {__m256 vec; float f[8];} m256_union;
+
+                // Permutation keys
+                static const m256i_union permutations[3] __attribute__((aligned(64))) = {
                     {.i = {0, 1, 2, 3, 4, 5, 6, 7}},
                     {.i = {0, 1, 4, 5, 2, 3, 6, 7}},
-                    {.i = {7, 5, 4, 1, 6, 4, 2, 0}}};
+                    {.i = {0, 2, 4, 6, 1, 3, 5, 7}}}; //doesn't invert itself
+                static const m256i_union inv_permutations[3] __attribute__((aligned(64))) = {
+                    {.i = {0, 1, 2, 3, 4, 5, 6, 7}},
+                    {.i = {0, 1, 4, 5, 2, 3, 6, 7}},
+                    {.i = {0, 4, 1, 5, 2, 6, 3, 7}}};
 
-                    typedef union {__m256 m256; float f[8];} m256_union;
-                    // Finalization twiddles
-                    static const m256_union real_twiddles[3] __attribute__((aligned(64))) = {
+                // Finalization twiddles
+                static const m256_union real_twiddles[3] __attribute__((aligned(64))) = {
                     {.f = {1.0f, M_SQRT1_2, 0.0f, -M_SQRT1_2, 1.0f, M_SQRT1_2, 0.0f, -M_SQRT1_2}},
                     {.f = {1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f}},
                     {.f = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}}};
-                    static const m256_union imag_twiddles[3] __attribute__((aligned(64))) = {
+                static const m256_union imag_twiddles[3] __attribute__((aligned(64))) = {
                     {.f = {0.0f, M_SQRT1_2, 1.0f, M_SQRT1_2, 0.0f, M_SQRT1_2, 1.0f, M_SQRT1_2}},
                     {.f = {0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f}},
                     {.f = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}}};
@@ -58,8 +64,15 @@ static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
                 static inline void nanofft_mm256_perm(__m256 *a, __m256 *b, uint32_t idx){
                     *a = _mm256_permutevar8x32_ps(*a, permutations[idx].m256i);
                     *b = _mm256_permutevar8x32_ps(*b, permutations[idx].m256i);}
-                #define PERM_VEC nanofft_mm256_perm
+                static inline void nanofft_mm256_inv_perm(__m256 *a, __m256 *b, uint32_t idx){
+                    *a = _mm256_permutevar8x32_ps(*a, inv_permutations[idx].m256i);
+                    *b = _mm256_permutevar8x32_ps(*b, inv_permutations[idx].m256i);}
+
+                #define RTWIDDLES real_twiddles
+                #define ITWIDDLES imag_twiddles
                 #define SHUFFLE_VEC nanofft_mm256_shuffle
+                #define PERM_VEC nanofft_mm256_perm
+                #define INVPERM_VEC nanofft_mm256_inv_perm
             #endif
     #elif defined(__SSE__)
         #include <xmmintrin.h>
