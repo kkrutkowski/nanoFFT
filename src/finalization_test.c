@@ -47,44 +47,41 @@ void sande_tukey_scalar(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *rea
 
 
 void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
-    //uint32_t iteration_counter = 0;
-    for (uint32_t i = 0; i < intlog2(VEC_LEN); i+= 1) { // Required addition of SIMD secondary loop to reach reasonable performance levels
-        //printf("%i", i);
-            for (uint32_t j = 0; j < N; j+= VEC_LEN * 2) {
-                // Load data into VEC variables
-                VEC real_even = LOAD_VEC(&real_signal[j]);
-                VEC real_odd = LOAD_VEC(&real_signal[j + VEC_LEN]);
-                PERM_VEC(&real_even, &real_odd, i);
-                SHUFFLE_VEC(&real_even, &real_odd);
-                VEC imag_even = LOAD_VEC(&imag_signal[j]);
-                VEC imag_odd = LOAD_VEC(&imag_signal[j + VEC_LEN]);
-                PERM_VEC(&imag_even, &imag_odd, i);
-                SHUFFLE_VEC(&imag_even, &imag_odd);
+    for (uint32_t i = intmax(0, intlog2(VEC_LEN) - intlog2(N)); i < intlog2(VEC_LEN); i+= 1) { // Required addition of SIMD secondary loop to reach reasonable performance levels
+        for (uint32_t j = 0; j < N; j+= VEC_LEN * 2) {
+            // Load data into VEC variables
+            VEC real_even = LOAD_VEC(&real_signal[j]);
+            VEC real_odd = LOAD_VEC(&real_signal[j + VEC_LEN]);
+            PERM_VEC(&real_even, &real_odd, i);
+            SHUFFLE_VEC(&real_even, &real_odd);
+            VEC imag_even = LOAD_VEC(&imag_signal[j]);
+            VEC imag_odd = LOAD_VEC(&imag_signal[j + VEC_LEN]);
+            PERM_VEC(&imag_even, &imag_odd, i);
+            SHUFFLE_VEC(&imag_even, &imag_odd);
 
-                // Calculate (even - odd) * buffer
-                VEC real_temp = SUB_VEC(real_even, real_odd);
-                VEC imag_temp = SUB_VEC(imag_even, imag_odd);
+            // Calculate (even - odd) * buffer
+            VEC real_temp = SUB_VEC(real_even, real_odd);
+            VEC imag_temp = SUB_VEC(imag_even, imag_odd);
 
-                // Butterfly operation
-                real_even = ADD_VEC(real_even, real_odd);
-                imag_even = ADD_VEC(imag_even, imag_odd);
+            // Butterfly operation
+            real_even = ADD_VEC(real_even, real_odd);
+            imag_even = ADD_VEC(imag_even, imag_odd);
 
-                real_odd = SUB_VEC(MUL_VEC(real_temp, RTWIDDLES[i].vec), MUL_VEC(imag_temp, ITWIDDLES[i].vec));
-                imag_odd = ADD_VEC(MUL_VEC(real_temp, ITWIDDLES[i].vec), MUL_VEC(imag_temp, RTWIDDLES[i].vec));
+            real_odd = SUB_VEC(MUL_VEC(real_temp, RTWIDDLES[i].vec), MUL_VEC(imag_temp, ITWIDDLES[i].vec));
+            imag_odd = ADD_VEC(MUL_VEC(real_temp, ITWIDDLES[i].vec), MUL_VEC(imag_temp, RTWIDDLES[i].vec));
 
-                //resture vectors to original permutation for next iteration
+            //resture vectors to original permutation for next iteration
 
-                SHUFFLE_VEC(&real_even, &real_odd);
-                INVPERM_VEC(&real_even, &real_odd, i);
-                SHUFFLE_VEC(&imag_even, &imag_odd);
-                INVPERM_VEC(&imag_even, &imag_odd, i); //fails at last iteration for some reason
+            SHUFFLE_VEC(&real_even, &real_odd);
+            INVPERM_VEC(&real_even, &real_odd, i);
+            SHUFFLE_VEC(&imag_even, &imag_odd);
+            INVPERM_VEC(&imag_even, &imag_odd, i); //fails at last iteration for some reason
 
-                STORE_VEC(&real_signal[j], real_even);
-                STORE_VEC(&imag_signal[j], imag_even);
-                STORE_VEC(&real_signal[j + VEC_LEN], real_odd);
-                STORE_VEC(&imag_signal[j + VEC_LEN], imag_odd);
-                }
-                //for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} printf("\n"); //debug printf
+            STORE_VEC(&real_signal[j], real_even);
+            STORE_VEC(&imag_signal[j], imag_even);
+            STORE_VEC(&real_signal[j + VEC_LEN], real_odd);
+            STORE_VEC(&imag_signal[j + VEC_LEN], imag_odd);
+        } //for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} printf("\n"); //debug printf
     }
 }
 
