@@ -47,7 +47,7 @@ void sande_tukey_scalar(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *rea
 
 
 void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
-    for (uint32_t i = intmax(0, intlog2(VEC_LEN) - intlog2(N)); i < intlog2(VEC_LEN); i+= 1) { // Required addition of SIMD secondary loop to reach reasonable performance levels
+    for (uint32_t i = intmax(0, intlog2(VEC_LEN) - intlog2(N)); i < intlog2(VEC_LEN); i+= 1) {
         for (uint32_t j = 0; j < N; j+= VEC_LEN * 2) {
             // Load data into VEC variables
             VEC real_even = LOAD_VEC(&real_signal[j]);
@@ -74,12 +74,12 @@ void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
 
             SHUFFLE_VEC(&real_even, &real_odd);
             INVPERM_VEC(&real_even, &real_odd, i);
-            SHUFFLE_VEC(&imag_even, &imag_odd);
-            INVPERM_VEC(&imag_even, &imag_odd, i); //fails at last iteration for some reason
-
             STORE_VEC(&real_signal[j], real_even);
-            STORE_VEC(&imag_signal[j], imag_even);
             STORE_VEC(&real_signal[j + VEC_LEN], real_odd);
+
+            SHUFFLE_VEC(&imag_even, &imag_odd);
+            INVPERM_VEC(&imag_even, &imag_odd, i);
+            STORE_VEC(&imag_signal[j], imag_even);
             STORE_VEC(&imag_signal[j + VEC_LEN], imag_odd);
         } //for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} printf("\n"); //debug printf
     }
