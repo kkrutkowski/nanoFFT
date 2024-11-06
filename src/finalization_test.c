@@ -39,7 +39,7 @@ typedef union {__m256i m256i; uint32_t i[8];} m256i_union;
                     *a = _mm256_permutevar8x32_ps(*a, inv_permutations[idx].m256i);
                     *b = _mm256_permutevar8x32_ps(*b, inv_permutations[idx].m256i);}
 
-typedef union {__m256 m256; float f[8];} m256_union;
+typedef union {__m256 vec; float f[8];} m256_union;
 static const m256_union real_twiddles[3] __attribute__((aligned(64))) = {
                     {.f = {1.0f, M_SQRT1_2, 0.0f, -M_SQRT1_2, 1.0f, M_SQRT1_2, 0.0f, -M_SQRT1_2}},
                     {.f = {1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f}},
@@ -48,6 +48,9 @@ static const m256_union imag_twiddles[3] __attribute__((aligned(64))) = {
                     {.f = {0.0f, M_SQRT1_2, 1.0f, M_SQRT1_2, 0.0f, M_SQRT1_2, 1.0f, M_SQRT1_2}},
                     {.f = {0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f}},
                     {.f = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}}};
+
+#define RTWIDDLES real_twiddles
+#define ITWIDDLES imag_twiddles
 
 
 void sande_tukey_scalar(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, uint32_t N) {
@@ -101,17 +104,17 @@ void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
                 real_odd = SUB_VEC(real_even, real_odd);
                 imag_odd = SUB_VEC(imag_even, imag_odd);
 
-                real_odd = SUB_VEC(MUL_VEC(real_odd, real_twiddles[i].m256), MUL_VEC(imag_odd, imag_twiddles[i].m256));
-                imag_odd = ADD_VEC(MUL_VEC(real_odd, imag_twiddles[i].m256), MUL_VEC(imag_odd, real_twiddles[i].m256));
+                real_odd = SUB_VEC(MUL_VEC(real_odd, RTWIDDLES[i].vec), MUL_VEC(imag_odd, ITWIDDLES[i].vec));
+                imag_odd = ADD_VEC(MUL_VEC(real_odd, ITWIDDLES[i].vec), MUL_VEC(imag_odd, RTWIDDLES[i].vec));
 
                 //resture vectors to original permutation for next iteration
                 nanofft_mm256_shuffle(&real_even, &real_odd);
                 nanofft_mm256_inv_perm(&real_even, &real_odd, i);
-                nanofft_mm256_shuffle(&imag_even, &imag_odd);
-                nanofft_mm256_inv_perm(&imag_even, &imag_odd, i);
-
                 STORE_VEC(&real_signal[j], real_even);
                 STORE_VEC(&imag_signal[j], imag_even);
+
+                nanofft_mm256_shuffle(&imag_even, &imag_odd);
+                nanofft_mm256_inv_perm(&imag_even, &imag_odd, i);
                 STORE_VEC(&real_signal[j + VEC_LEN], real_odd);
                 STORE_VEC(&imag_signal[j + VEC_LEN], imag_odd);
                 }
