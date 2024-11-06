@@ -94,26 +94,26 @@ void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
                 nanofft_mm256_shuffle(&imag_even, &imag_odd);
 
                 // Butterfly operation
-                VEC real_output_even = ADD_VEC(real_even, real_odd);
-                VEC imag_output_even = ADD_VEC(imag_even, imag_odd);
+                real_even = ADD_VEC(real_even, real_odd);
+                imag_even = ADD_VEC(imag_even, imag_odd);
 
                 // Calculate (even - odd) * buffer
-                VEC real_temp = SUB_VEC(real_even, real_odd);
-                VEC imag_temp = SUB_VEC(imag_even, imag_odd);
+                real_odd = SUB_VEC(real_even, real_odd);
+                imag_odd = SUB_VEC(imag_even, imag_odd);
 
-                VEC real_output_odd = SUB_VEC(MUL_VEC(real_temp, real_twiddles[i].m256), MUL_VEC(imag_temp, imag_twiddles[i].m256));
-                VEC imag_output_odd = ADD_VEC(MUL_VEC(real_temp, imag_twiddles[i].m256), MUL_VEC(imag_temp, real_twiddles[i].m256));
+                real_odd = SUB_VEC(MUL_VEC(real_odd, real_twiddles[i].m256), MUL_VEC(imag_odd, imag_twiddles[i].m256));
+                imag_odd = ADD_VEC(MUL_VEC(real_odd, imag_twiddles[i].m256), MUL_VEC(imag_odd, real_twiddles[i].m256));
 
                 //resture vectors to original permutation for next iteration
-                nanofft_mm256_shuffle(&real_output_even, &real_output_odd);
-                nanofft_mm256_inv_perm(&real_output_even, &real_output_odd, i);
-                nanofft_mm256_shuffle(&imag_output_even, &imag_output_odd);
-                nanofft_mm256_inv_perm(&imag_output_even, &imag_output_odd, i); //fails at last iteration for some reason
+                nanofft_mm256_shuffle(&real_even, &real_odd);
+                nanofft_mm256_inv_perm(&real_even, &real_odd, i);
+                nanofft_mm256_shuffle(&imag_even, &imag_odd);
+                nanofft_mm256_inv_perm(&imag_even, &imag_odd, i);
 
-                STORE_VEC(&real_signal[j], real_output_even);
-                STORE_VEC(&imag_signal[j], imag_output_even);
-                STORE_VEC(&real_signal[j + VEC_LEN], real_output_odd);
-                STORE_VEC(&imag_signal[j + VEC_LEN], imag_output_odd);
+                STORE_VEC(&real_signal[j], real_even);
+                STORE_VEC(&imag_signal[j], imag_even);
+                STORE_VEC(&real_signal[j + VEC_LEN], real_odd);
+                STORE_VEC(&imag_signal[j + VEC_LEN], imag_odd);
                 }
                 //for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} printf("\n"); //debug printf
     }
