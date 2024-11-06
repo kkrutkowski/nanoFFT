@@ -65,30 +65,23 @@ void sande_tukey_scalar(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *rea
                 real_signal[i + j] = real_even + real_odd;
                 imag_signal[i + j] = imag_even + imag_odd;
 
-                //if(step == 2){printf("%i ", i + j + half_step);}
-
                 // Calculate (even - odd) * buffer
                 FLOAT real_temp = real_even - real_odd;
                 FLOAT imag_temp = imag_even - imag_odd;
-                //printf("%.4ff, ",real_buffer[shift + j]);
-                //printf("%.4ff, ",imag_buffer[shift + j]);
-                //real_signal[i + j + half_step] = real_temp * real_buffer[shift + j] - imag_temp * imag_buffer[shift + j];
+
                 real_signal[i + j + half_step] = real_temp * real_buffer[shift + j] - imag_temp * imag_buffer[shift + j];
                 imag_signal[i + j + half_step] = real_temp * imag_buffer[shift + j] + imag_temp * real_buffer[shift + j];
             }
         }
         shift += half_step;
-        for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} //debug printf
-        printf("\n");
+        //for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} printf("\n"); //debug printf
     }
 }
 
 
 
 void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
-    //uint32_t iteration_counter = 0;
     for (uint32_t i = 0; i < 3; i+= 1) { // Required addition of SIMD secondary loop to reach reasonable performance levels
-        //printf("%i", i);
             for (uint32_t j = 0; j < N; j+= VEC_LEN * 2) {
                 // Load data into VEC variables
                 VEC real_even = LOAD_VEC(&real_signal[j]);
@@ -107,14 +100,11 @@ void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
                 // Calculate (even - odd) * buffer
                 VEC real_temp = SUB_VEC(real_even, real_odd);
                 VEC imag_temp = SUB_VEC(imag_even, imag_odd);
-                VEC buffer_real = real_twiddles[i].m256;
-                VEC buffer_imag = imag_twiddles[i].m256;
 
-                VEC real_output_odd = SUB_VEC(MUL_VEC(real_temp, buffer_real), MUL_VEC(imag_temp, buffer_imag));
-                VEC imag_output_odd = ADD_VEC(MUL_VEC(real_temp, buffer_imag), MUL_VEC(imag_temp, buffer_real));
+                VEC real_output_odd = SUB_VEC(MUL_VEC(real_temp, real_twiddles[i].m256), MUL_VEC(imag_temp, imag_twiddles[i].m256));
+                VEC imag_output_odd = ADD_VEC(MUL_VEC(real_temp, imag_twiddles[i].m256), MUL_VEC(imag_temp, real_twiddles[i].m256));
 
                 //resture vectors to original permutation for next iteration
-
                 nanofft_mm256_shuffle(&real_output_even, &real_output_odd);
                 nanofft_mm256_inv_perm(&real_output_even, &real_output_odd, i);
                 nanofft_mm256_shuffle(&imag_output_even, &imag_output_odd);
@@ -125,8 +115,7 @@ void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
                 STORE_VEC(&real_signal[j + VEC_LEN], real_output_odd);
                 STORE_VEC(&imag_signal[j + VEC_LEN], imag_output_odd);
                 }
-                for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} //debug printf
-                printf("\n");
+                //for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} printf("\n"); //debug printf
     }
 }
 
