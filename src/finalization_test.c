@@ -23,7 +23,11 @@ typedef union {__m256i m256i; uint32_t i[8];} m256i_union;
                     static const m256i_union permutations[3] __attribute__((aligned(64))) = {
                     {.i = {0, 1, 2, 3, 4, 5, 6, 7}},
                     {.i = {0, 1, 4, 5, 2, 3, 6, 7}},
-                    {.i = {7, 5, 4, 1, 6, 4, 2, 0}}};
+                    {.i = {0, 2, 4, 6, 1, 3, 5, 7}}}; //doesn't invert itself
+                    static const m256i_union inv_permutations[3] __attribute__((aligned(64))) = {
+                    {.i = {0, 1, 2, 3, 4, 5, 6, 7}},
+                    {.i = {0, 1, 4, 5, 2, 3, 6, 7}},
+                    {.i = {0, 4, 1, 5, 2, 6, 3, 7}}};
                 static inline void nanofft_mm256_shuffle(__m256 *a, __m256 *b){
                     __m256 tmp = _mm256_set_m128(_mm256_extractf128_ps(*b, 0), _mm256_extractf128_ps(*a, 0));
                     *b = _mm256_set_m128(_mm256_extractf128_ps(*b, 1), _mm256_extractf128_ps(*a, 1));
@@ -31,15 +35,9 @@ typedef union {__m256i m256i; uint32_t i[8];} m256i_union;
                 static inline void nanofft_mm256_perm(__m256 *a, __m256 *b, uint32_t idx){
                     *a = _mm256_permutevar8x32_ps(*a, permutations[idx].m256i);
                     *b = _mm256_permutevar8x32_ps(*b, permutations[idx].m256i);}
-
-                static inline void _mm256_perm_ps(__m256 *a, __m256 *b, uint32_t idx){
-                    nanofft_mm256_perm(a, b, idx);
-                    nanofft_mm256_shuffle(a, b);}
-
-                static inline void _mm256_inv_perm_ps(__m256 *a, __m256 *b, uint32_t idx){
-                    nanofft_mm256_shuffle(a, b);
-                    nanofft_mm256_perm(a, b, idx);
-                }
+                static inline void nanofft_mm256_inv_perm(__m256 *a, __m256 *b, uint32_t idx){
+                    *a = _mm256_permutevar8x32_ps(*a, inv_permutations[idx].m256i);
+                    *b = _mm256_permutevar8x32_ps(*b, inv_permutations[idx].m256i);}
 
 typedef union {__m256 m256; float f[8];} m256_union;
 static const m256_union real_twiddles[3] __attribute__((aligned(64))) = {
@@ -56,7 +54,6 @@ void sande_tukey_scalar(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *rea
     uint32_t shift = 0;
     for (uint32_t step = intmin(VEC_LEN, N); step > 1; step >>= 1) { // Required addition of SIMD secondary loop to reach reasonable performance levels
     uint32_t half_step = step >> 1;
-    printf("\n");
         for (uint32_t i = 0; i < N; i += step) {
             for (uint32_t j = 0; j < half_step; j++) {
                 FLOAT real_even = real_signal[i + j];
@@ -68,10 +65,12 @@ void sande_tukey_scalar(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *rea
                 real_signal[i + j] = real_even + real_odd;
                 imag_signal[i + j] = imag_even + imag_odd;
 
+                //if(step == 2){printf("%i ", i + j + half_step);}
+
                 // Calculate (even - odd) * buffer
                 FLOAT real_temp = real_even - real_odd;
                 FLOAT imag_temp = imag_even - imag_odd;
-                printf("%.4ff, ",real_buffer[shift + j]);
+                //printf("%.4ff, ",real_buffer[shift + j]);
                 //printf("%.4ff, ",imag_buffer[shift + j]);
                 //real_signal[i + j + half_step] = real_temp * real_buffer[shift + j] - imag_temp * imag_buffer[shift + j];
                 real_signal[i + j + half_step] = real_temp * real_buffer[shift + j] - imag_temp * imag_buffer[shift + j];
@@ -79,6 +78,8 @@ void sande_tukey_scalar(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *rea
             }
         }
         shift += half_step;
+        for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} //debug printf
+        printf("\n");
     }
 }
 
@@ -87,7 +88,7 @@ void sande_tukey_scalar(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *rea
 void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
     //uint32_t iteration_counter = 0;
     for (uint32_t i = 0; i < 3; i+= 1) { // Required addition of SIMD secondary loop to reach reasonable performance levels
-        printf("%i", i);
+        //printf("%i", i);
             for (uint32_t j = 0; j < N; j+= VEC_LEN * 2) {
                 // Load data into VEC variables
                 VEC real_even = LOAD_VEC(&real_signal[j]);
@@ -113,29 +114,26 @@ void sande_tukey_vector(FLOAT *real_signal, FLOAT *imag_signal, uint32_t N) {
                 VEC imag_output_odd = ADD_VEC(MUL_VEC(real_temp, buffer_imag), MUL_VEC(imag_temp, buffer_real));
 
                 //resture vectors to original permutation for next iteration
+
                 nanofft_mm256_shuffle(&real_output_even, &real_output_odd);
-                nanofft_mm256_perm(&real_output_even, &real_output_odd, i);
-                nanofft_mm256_shuffle(&real_output_even, &real_output_odd);
-                nanofft_mm256_perm(&imag_output_even, &imag_output_odd, i);
-                /*
-                nanofft_mm256_perm(&real_output_even, &real_output_odd, i);
-                nanofft_mm256_shuffle(&real_output_even, &real_output_odd);
-                nanofft_mm256_perm(&imag_output_even, &imag_output_odd, i);
+                nanofft_mm256_inv_perm(&real_output_even, &real_output_odd, i);
                 nanofft_mm256_shuffle(&imag_output_even, &imag_output_odd);
-                */
+                nanofft_mm256_inv_perm(&imag_output_even, &imag_output_odd, i); //fails at last iteration for some reason
 
                 STORE_VEC(&real_signal[j], real_output_even);
                 STORE_VEC(&imag_signal[j], imag_output_even);
                 STORE_VEC(&real_signal[j + VEC_LEN], real_output_odd);
                 STORE_VEC(&imag_signal[j + VEC_LEN], imag_output_odd);
                 }
+                for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} //debug printf
+                printf("\n");
     }
 }
 
 
 int main() {
     //int N = 64;
-    printf("ąąą");
+    //printf("ąąą");
     int N = 8;
     FLOAT t[N];
     FLOAT *real_signal = (FLOAT *) aligned_alloc(64, intmax(N * sizeof(FLOAT), sizeof(VEC) << 1));
@@ -151,8 +149,8 @@ int main() {
 
     generate_buffer(N, real_buffer , imag_buffer);
     //nanofft_execute(real_signal, imag_signal, real_buffer, imag_buffer, N);
-    //sande_tukey_scalar(real_signal, imag_signal, real_buffer, imag_buffer, N);
-    sande_tukey_vector(real_signal, imag_signal, N);
+    sande_tukey_scalar(real_signal, imag_signal, real_buffer, imag_buffer, N);
+    //sande_tukey_vector(real_signal, imag_signal, N);
     bit_reverse_permutation(real_signal, imag_signal, N);
 
     printf("\n\nSande-Tukey FFT output:\n");
