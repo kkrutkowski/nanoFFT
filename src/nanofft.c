@@ -14,7 +14,7 @@
 
 static inline bool is_power_of_two(int N) {return (N > 0) && ((N & (N - 1)) == 0);}
 static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
-static inline uint32_t intmax(uint32_t a, uint32_t b) {return (a > b) ? a : b;}
+static inline uint32_t intmax(int32_t a, int32_t b) {return (a > b) ? a : b;}
 
 #ifndef DOUBLE // Single precision
     #ifdef __AVX512F__
@@ -57,10 +57,11 @@ static inline uint32_t intmax(uint32_t a, uint32_t b) {return (a > b) ? a : b;}
                     {.f = {0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f}},
                     {.f = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}}};
 
-                static inline void nanofft_mm256_shuffle(__m256 *a, __m256 *b){
-                    __m256 tmp = _mm256_set_m128(_mm256_extractf128_ps(*b, 0), _mm256_extractf128_ps(*a, 0));
-                    *b = _mm256_set_m128(_mm256_extractf128_ps(*b, 1), _mm256_extractf128_ps(*a, 1));
-                    *a = tmp;}
+                static inline void nanofft_mm256_shuffle(__m256 *a, __m256 *b) {
+                    __m256 tmp = _mm256_permute2f128_ps(*a, *b, 0x20);  // 0x20 selects lower lane of `a` and lower lane of `b`
+                    *b = _mm256_permute2f128_ps(*a, *b, 0x31);          // 0x31 selects upper lane of `a` and upper lane of `b`
+                    *a = tmp;
+                }
                 static inline void nanofft_mm256_perm(__m256 *a, __m256 *b, uint32_t idx){
                     *a = _mm256_permutevar8x32_ps(*a, permutations[idx].m256i);
                     *b = _mm256_permutevar8x32_ps(*b, permutations[idx].m256i);}
@@ -153,6 +154,43 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
         shift += half_step;
     } //*
     #endif
+    #ifdef SHUFFLE_VEC
+        for (uint32_t i = intmax(0, (int32_t)intlog2(VEC_LEN) - (int32_t)intlog2(N)); i < intlog2(VEC_LEN); i+= 1) {
+            for (uint32_t j = 0; j < N; j+= VEC_LEN * 2) {
+                // Load data into VEC variables
+                VEC real_even = LOAD_VEC(&real_signal[j]);
+                VEC real_odd = LOAD_VEC(&real_signal[j + VEC_LEN]);
+                PERM_VEC(&real_even, &real_odd, i);
+                SHUFFLE_VEC(&real_even, &real_odd);
+                VEC imag_even = LOAD_VEC(&imag_signal[j]);
+                VEC imag_odd = LOAD_VEC(&imag_signal[j + VEC_LEN]);
+                PERM_VEC(&imag_even, &imag_odd, i);
+                SHUFFLE_VEC(&imag_even, &imag_odd);
+
+                VEC real_temp = SUB_VEC(real_even, real_odd);
+                VEC imag_temp = SUB_VEC(imag_even, imag_odd);
+
+                // Butterfly operation
+                real_even = ADD_VEC(real_even, real_odd);
+                imag_even = ADD_VEC(imag_even, imag_odd);
+
+                real_odd = SUB_VEC(MUL_VEC(real_temp, RTWIDDLES[i].vec), MUL_VEC(imag_temp, ITWIDDLES[i].vec));
+                imag_odd = ADD_VEC(MUL_VEC(real_temp, ITWIDDLES[i].vec), MUL_VEC(imag_temp, RTWIDDLES[i].vec));
+
+                //resture vectors to original permutation for next iteration
+
+                SHUFFLE_VEC(&real_even, &real_odd);
+                INVPERM_VEC(&real_even, &real_odd, i);
+                STORE_VEC(&real_signal[j], real_even);
+                STORE_VEC(&real_signal[j + VEC_LEN], real_odd);
+
+                SHUFFLE_VEC(&imag_even, &imag_odd);
+                INVPERM_VEC(&imag_even, &imag_odd, i);
+                STORE_VEC(&imag_signal[j], imag_even);
+                STORE_VEC(&imag_signal[j + VEC_LEN], imag_odd);
+            } //for (uint32_t j = 0; j < N; j+= 1) {printf("%.1f %.1f \t", real_signal[j], imag_signal[j]);} printf("\n"); //debug printf
+        }
+    #else
         for (uint32_t step = intmin(VEC_LEN, N); step > 1; step >>= 1) { // Required addition of SIMD secondary loop to reach reasonable performance levels
         uint32_t half_step = step >> 1;
         for (uint32_t i = 0; i < N; i += step) {
@@ -175,7 +213,7 @@ void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *r
         }
         shift += half_step;
     }
-    //*/ //add the vectorized finalization here
+    #endif
 }
 
 void generate_buffer(uint32_t N, FLOAT *real_buffer, FLOAT *imag_buffer) {
