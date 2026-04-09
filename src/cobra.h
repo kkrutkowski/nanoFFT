@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define LOG_BLOCK_WIDTH 6 // Recommended block width for x86 (64 byte cashe line)
+#define LOG_BLOCK_WIDTH 6 // Recommended block width for x86 (64 byte cache line)
 #define BLOCK_WIDTH (1 << LOG_BLOCK_WIDTH)
 
 static inline uint32_t intlog2(uint32_t input){uint32_t output; frexp(input >> 1, (int*) &output); return output;}
@@ -56,43 +56,60 @@ static inline void table_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
         }
 return;}
 
-// COBRA bit-reverse algorithm implementation for separate real and imaginary arrays
-static inline void cobra_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
+// COBRA bit-reverse algorithm implementation using pre-allocated buffers
+static inline void cobra_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n, FLOAT *buffer_real, FLOAT *buffer_imag) {
 
     uint32_t num_b_bits = log_n - 2 * LOG_BLOCK_WIDTH;
     uint32_t b_size = 1 << num_b_bits;
-    uint32_t block_width = BLOCK_WIDTH;
 
-    FLOAT* buffer_real = (FLOAT*) aligned_alloc(64, BLOCK_WIDTH * BLOCK_WIDTH * sizeof(FLOAT));
-    FLOAT* buffer_imag = (FLOAT*) aligned_alloc(64, BLOCK_WIDTH * BLOCK_WIDTH * sizeof(FLOAT));
-    //memset(buffer_real, 0, sizeof(buffer_real)); memset(buffer_imag, 0, sizeof(buffer_imag)); //redundant (?). Leaving as a comment just in case.
+    // Total left shift amount for the 'a' and 'c' components
+    uint32_t shift_top = num_b_bits + LOG_BLOCK_WIDTH;
+
+    // OPTIMIZATION 1: Precompute 6-bit reversals for the inner loops.
+    // This entirely removes the reverse_bits() loop overhead from the inner paths.
+    uint32_t rev6[BLOCK_WIDTH];
+    for (uint32_t i = 0; i < BLOCK_WIDTH; ++i) {
+        // Since we know we are reversing exactly 6 bits, we can just grab
+        // the 8-bit reverse and shift right by 2.
+        rev6[i] = bit_reverse_table[i] >> 2;
+    }
 
     for (uint32_t b = 0; b < b_size; ++b) {
         uint32_t b_rev = reverse_bits(b, num_b_bits);
 
-        // Copy block to buffer
-        for (uint32_t a = 0; a < block_width; ++a) {
-            uint32_t a_rev = reverse_bits(a, LOG_BLOCK_WIDTH);
+        // OPTIMIZATION 2: Hoist 'b' shifts to the outermost loop
+        uint32_t b_shifted = b << LOG_BLOCK_WIDTH;
+        uint32_t b_rev_shifted = b_rev << LOG_BLOCK_WIDTH;
+
+        // 1. Copy block to buffer
+        for (uint32_t a = 0; a < BLOCK_WIDTH; ++a) {
+            uint32_t a_rev = rev6[a];
+            uint32_t a_shifted = a << shift_top;
+            uint32_t a_rev_shifted = a_rev << LOG_BLOCK_WIDTH;
+
             for (uint32_t c = 0; c < BLOCK_WIDTH; ++c) {
-                uint32_t idx = (a << num_b_bits << LOG_BLOCK_WIDTH) | (b << LOG_BLOCK_WIDTH) | c;
-                uint32_t buffer_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
+                uint32_t idx = a_shifted | b_shifted | c;
+                uint32_t buffer_idx = a_rev_shifted | c;
+
                 buffer_real[buffer_idx] = real[idx];
                 buffer_imag[buffer_idx] = imag[idx];
             }
         }
 
+        // 2. Cross-block swapping
         for (uint32_t c = 0; c < BLOCK_WIDTH; ++c) {
-            uint32_t c_rev = reverse_bits(c, LOG_BLOCK_WIDTH);
+            uint32_t c_rev = rev6[c];
+            uint32_t c_rev_shifted = c_rev << shift_top;
 
             for (uint32_t a_rev = 0; a_rev < BLOCK_WIDTH; ++a_rev) {
-                uint32_t a = reverse_bits(a_rev, LOG_BLOCK_WIDTH);
+                uint32_t a = rev6[a_rev];
 
                 bool index_less_than_reverse = (a < c_rev) ||
                                                (a == c_rev && b < b_rev) ||
                                                (a == c_rev && b == b_rev && a_rev < c);
 
                 if (index_less_than_reverse) {
-                    uint32_t v_idx = (c_rev << num_b_bits << LOG_BLOCK_WIDTH) | (b_rev << LOG_BLOCK_WIDTH) | a_rev;
+                    uint32_t v_idx = c_rev_shifted | b_rev_shifted | a_rev;
                     uint32_t b_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
 
                     FLOAT temp_real = real[v_idx];
@@ -107,18 +124,20 @@ static inline void cobra_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
             }
         }
 
-        // Copy changes that were swapped into buffer above
+        // 3. Copy changes that were swapped into buffer above back
         for (uint32_t a = 0; a < BLOCK_WIDTH; ++a) {
-            uint32_t a_rev = reverse_bits(a, LOG_BLOCK_WIDTH);
+            uint32_t a_rev = rev6[a];
+            uint32_t a_shifted = a << shift_top;
+
             for (uint32_t c = 0; c < BLOCK_WIDTH; ++c) {
-                uint32_t c_rev = reverse_bits(c, LOG_BLOCK_WIDTH);
+                uint32_t c_rev = rev6[c];
 
                 bool index_less_than_reverse = (a < c_rev) ||
                                                (a == c_rev && b < b_rev) ||
                                                (a == c_rev && b == b_rev && a_rev < c);
 
                 if (index_less_than_reverse) {
-                    uint32_t v_idx = (a << num_b_bits << LOG_BLOCK_WIDTH) | (b << LOG_BLOCK_WIDTH) | c;
+                    uint32_t v_idx = a_shifted | b_shifted | c;
                     uint32_t b_idx = (a_rev << LOG_BLOCK_WIDTH) | c;
 
                     FLOAT temp_real = real[v_idx];
@@ -133,15 +152,13 @@ static inline void cobra_shuffle(FLOAT *real, FLOAT *imag, uint32_t log_n) {
             }
         }
     }
-free(buffer_real);
-free(buffer_imag);
 }
 
-// Function to perform bit-reverse permutation on the output
-inline static void bit_reverse_permutation(FLOAT *real, FLOAT *imag, uint32_t N) {
+// Function to perform bit-reverse permutation on the output using pre-allocated buffers
+inline static void bit_reverse_permutation(FLOAT *real, FLOAT *imag, uint32_t N, FLOAT *buffer_real, FLOAT *buffer_imag) {
     uint32_t order = intlog2(N);
     if (order <= 2 * LOG_BLOCK_WIDTH) {table_shuffle(real, imag, order);}
-    else {cobra_shuffle(real, imag, order);}
+    else {cobra_shuffle(real, imag, order, buffer_real, buffer_imag);}
 }
 
 #endif
