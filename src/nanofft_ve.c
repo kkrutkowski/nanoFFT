@@ -46,10 +46,56 @@ typedef VEC_INT_T VEC_INT __attribute__((vector_size(VEC_BYTES)));
 #define LOAD_VEC(ptr) (*(const VEC*)(ptr))
 #define STORE_VEC(ptr, val) (*(VEC*)(ptr) = (val))
 
-// Enable the intra-vector pass for 8-element vectors (typically float + 256-bit SIMD)
-#if VEC_LEN == 8
-    #define HAS_INTRA_VEC_PASS
+// FFT Plan Structure
+typedef struct {
+    uint32_t N;
+    FLOAT *twiddle_real;
+    FLOAT *twiddle_imag;
+    FLOAT *cobra_buffer_real;
+    FLOAT *cobra_buffer_imag;
+} nanofft_plan;
 
+// Enable the intra-vector pass for 8-element vectors (typically float + 256-bit SIMD)
+// Enable the intra-vector pass for 16, 8, or 4-element vectors
+#if VEC_LEN == 16 || VEC_LEN == 8 || VEC_LEN == 4
+#define HAS_INTRA_VEC_PASS
+
+#if VEC_LEN == 16
+    // Twiddle constants for N=16 (cos(pi/8) and sin(pi/8))
+    #define W16_C1 ((FLOAT)0.9238795325112867)
+    #define W16_S1 ((FLOAT)0.3826834323650898)
+
+    static const VEC_INT permutations[4] __attribute__((aligned(64))) = {
+        {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+        {0, 1, 2, 3, 8, 9, 10, 11, 4, 5, 6, 7, 12, 13, 14, 15},
+        {0, 1, 4, 5, 8, 9, 12, 13, 2, 3, 6, 7, 10, 11, 14, 15},
+        {0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15}};
+
+    static const VEC_INT inv_permutations[4] __attribute__((aligned(64))) = {
+        {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+        {0, 1, 2, 3, 8, 9, 10, 11, 4, 5, 6, 7, 12, 13, 14, 15},
+        {0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15},
+        {0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15}};
+
+    static const VEC real_twiddles[4] __attribute__((aligned(64))) = {
+        {(FLOAT)1.0, W16_C1, (FLOAT)M_SQRT1_2, W16_S1, (FLOAT)0.0, -W16_S1, (FLOAT)-M_SQRT1_2, -W16_C1, (FLOAT)1.0, W16_C1, (FLOAT)M_SQRT1_2, W16_S1, (FLOAT)0.0, -W16_S1, (FLOAT)-M_SQRT1_2, -W16_C1},
+        {(FLOAT)1.0, (FLOAT)M_SQRT1_2, (FLOAT)0.0, (FLOAT)-M_SQRT1_2, (FLOAT)1.0, (FLOAT)M_SQRT1_2, (FLOAT)0.0, (FLOAT)-M_SQRT1_2, (FLOAT)1.0, (FLOAT)M_SQRT1_2, (FLOAT)0.0, (FLOAT)-M_SQRT1_2, (FLOAT)1.0, (FLOAT)M_SQRT1_2, (FLOAT)0.0, (FLOAT)-M_SQRT1_2},
+        {(FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0},
+        {(FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0}};
+
+    static const VEC imag_twiddles[4] __attribute__((aligned(64))) = {
+        {(FLOAT)0.0, W16_S1, (FLOAT)M_SQRT1_2, W16_C1, (FLOAT)1.0, W16_C1, (FLOAT)M_SQRT1_2, W16_S1, (FLOAT)0.0, W16_S1, (FLOAT)M_SQRT1_2, W16_C1, (FLOAT)1.0, W16_C1, (FLOAT)M_SQRT1_2, W16_S1},
+        {(FLOAT)0.0, (FLOAT)M_SQRT1_2, (FLOAT)1.0, (FLOAT)M_SQRT1_2, (FLOAT)0.0, (FLOAT)M_SQRT1_2, (FLOAT)1.0, (FLOAT)M_SQRT1_2, (FLOAT)0.0, (FLOAT)M_SQRT1_2, (FLOAT)1.0, (FLOAT)M_SQRT1_2, (FLOAT)0.0, (FLOAT)M_SQRT1_2, (FLOAT)1.0, (FLOAT)M_SQRT1_2},
+        {(FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0},
+        {(FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0}};
+
+    static inline void nanofft_vec_shuffle(VEC *a, VEC *b) {
+        VEC tmp = __builtin_shuffle(*a, *b, (VEC_INT){0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23});
+        *b      = __builtin_shuffle(*a, *b, (VEC_INT){8, 9, 10, 11, 12, 13, 14, 15, 24, 25, 26, 27, 28, 29, 30, 31});
+        *a      = tmp;
+    }
+
+#elif VEC_LEN == 8
     // Permutation keys for __builtin_shuffle
     static const VEC_INT permutations[3] __attribute__((aligned(64))) = {
         {0, 1, 2, 3, 4, 5, 6, 7},
@@ -78,6 +124,33 @@ typedef VEC_INT_T VEC_INT __attribute__((vector_size(VEC_BYTES)));
         *a      = tmp;
     }
 
+#elif VEC_LEN == 4
+    // Permutation keys for __builtin_shuffle
+    static const VEC_INT permutations[2] __attribute__((aligned(64))) = {
+        {0, 1, 2, 3},
+        {0, 2, 1, 3}};
+
+    static const VEC_INT inv_permutations[2] __attribute__((aligned(64))) = {
+        {0, 1, 2, 3},
+        {0, 2, 1, 3}};
+
+    // Finalization twiddles
+    static const VEC real_twiddles[2] __attribute__((aligned(64))) = {
+        {(FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0},
+        {(FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0, (FLOAT)1.0}};
+
+    static const VEC imag_twiddles[2] __attribute__((aligned(64))) = {
+        {(FLOAT)0.0, (FLOAT)1.0, (FLOAT)0.0, (FLOAT)1.0},
+        {(FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0, (FLOAT)0.0}};
+
+    static inline void nanofft_vec_shuffle(VEC *a, VEC *b) {
+        VEC tmp = __builtin_shuffle(*a, *b, (VEC_INT){0, 1, 4, 5});
+        *b      = __builtin_shuffle(*a, *b, (VEC_INT){2, 3, 6, 7});
+        *a      = tmp;
+    }
+#endif
+
+    // Shared perm/inv_perm logic across all supported VEC_LEN sizes
     static inline void nanofft_vec_perm(VEC *a, VEC *b, uint32_t idx){
         *a = __builtin_shuffle(*a, permutations[idx]);
         *b = __builtin_shuffle(*b, permutations[idx]);
@@ -88,6 +161,7 @@ typedef VEC_INT_T VEC_INT __attribute__((vector_size(VEC_BYTES)));
         *b = __builtin_shuffle(*b, inv_permutations[idx]);
     }
 #endif
+
 
 void sande_tukey_in_place(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, uint32_t N) {
     uint32_t shift = 0;
@@ -184,8 +258,42 @@ void generate_buffer(uint32_t N, FLOAT *real_buffer, FLOAT *imag_buffer) {
     }
 }
 
-void nanofft_execute(FLOAT *real_signal, FLOAT *imag_signal, const FLOAT *real_buffer, const FLOAT *imag_buffer, uint32_t N) {
-    if (!is_power_of_two(N)) {fprintf(stderr, "Signal length must be a power of 2\n"); exit(EXIT_FAILURE);}
-    sande_tukey_in_place(real_signal, imag_signal, real_buffer, imag_buffer, N);
-    bit_reverse_permutation(real_signal, imag_signal, N);
+// Plan allocation and initialization
+nanofft_plan* nanofft_make_plan(uint32_t N) {
+    if (!is_power_of_two(N)) {
+        fprintf(stderr, "Signal length must be a power of 2\n");
+        exit(EXIT_FAILURE);
+    }
+
+    nanofft_plan *plan = (nanofft_plan*)malloc(sizeof(nanofft_plan));
+    plan->N = N;
+
+    // Allocate and generate twiddle factors
+    plan->twiddle_real = (FLOAT*)aligned_alloc(64, N * sizeof(FLOAT));
+    plan->twiddle_imag = (FLOAT*)aligned_alloc(64, N * sizeof(FLOAT));
+    generate_buffer(N, plan->twiddle_real, plan->twiddle_imag);
+
+    // Allocate COBRA shuffle buffers
+    size_t cobra_size = BLOCK_WIDTH * BLOCK_WIDTH * sizeof(FLOAT);
+    plan->cobra_buffer_real = (FLOAT*)aligned_alloc(64, cobra_size);
+    plan->cobra_buffer_imag = (FLOAT*)aligned_alloc(64, cobra_size);
+
+    return plan;
+}
+
+// Memory cleanup for the plan
+void nanofft_destroy_plan(nanofft_plan *plan) {
+    if (plan) {
+        free(plan->twiddle_real);
+        free(plan->twiddle_imag);
+        free(plan->cobra_buffer_real);
+        free(plan->cobra_buffer_imag);
+        free(plan);
+    }
+}
+
+// Execute FFT using the generated plan
+void nanofft_execute(nanofft_plan *plan, FLOAT *real_signal, FLOAT *imag_signal) {
+    sande_tukey_in_place(real_signal, imag_signal, plan->twiddle_real, plan->twiddle_imag, plan->N);
+    bit_reverse_permutation(real_signal, imag_signal, plan->N, plan->cobra_buffer_real, plan->cobra_buffer_imag);
 }
