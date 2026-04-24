@@ -20,6 +20,94 @@ static inline bool is_power_of_two(int N) {return (N > 0) && ((N & (N - 1)) == 0
 static inline uint32_t intmin(uint32_t a, uint32_t b) {return (a < b) ? a : b;}
 static inline uint32_t intmax(int32_t a, int32_t b) {return (a > b) ? a : b;}
 
+#ifndef DOUBLE
+    #define M_COS2PI cos2pif
+    #define M_SIN2PI sin2pif
+    inline float sin2pif(float x) {
+        // 1. Map to [0, 1) using truncate-and-subtract
+        float f = x - (float)((int)x);
+        if (f < 0.0f) {f += 1.0f;}
+        // 2. Map to [0, 0.5) and extract sign
+        float sign = 1.0f;
+        if (f >= 0.5f) {sign = -1.0f;f -= 0.5f;}
+        // 3. Map to [0, 0.25] (Symmetry around 0.25)
+        if (f > 0.25f) {f = 0.5f - f;}
+        // 4. Remez Polynomial Evaluation (Odd powers only)
+        float f2 = f * f;
+        float p = f2 * 39.536706065730207835108712734262f - 76.549782293595742666226937116116f;
+        p = p * f2 + 81.601004073261773523492199897936f;
+        p = p * f2 - 41.341655031416278077153126232486f;
+        p = p * f2 + 6.2831851600894774430188071795666f;
+        p = p * f; // Multiply by x^1
+        return p * sign;
+    }
+
+    inline float cos2pif(float x) {
+        // 1. Map to [0, 1) using truncate-and-subtract
+        float f = x - (float)((int)x);
+        if (f < 0.0f) {f += 1.0f;}
+        // 2. Map to [0, 0.5] (Cosine is symmetric around 0.5)
+        if (f > 0.5f) {f = 1.0f - f;}
+        // 3. Map to [0, 0.25] and extract sign
+        float sign = 1.0f;
+        if (f > 0.25f) {sign = -1.0f;f = 0.5f - f;}
+        // 4. Remez Polynomial Evaluation (Even powers only)
+        float f2 = f * f;
+        float p = f2 * 56.242380464873243259663276802701f - 85.240330322699427859509454517828f;
+        p = p * f2 + 64.934590626780991246193352727536f;
+        p = p * f2 - 19.739171434702393618770795066531f;
+        p = p * f2 + 0.99999995346667013630639784578184f;
+        return p * sign;
+    }
+#else
+    #define M_COS2PI cos2pi
+    #define M_SIN2PI sin2pi
+    inline double sin2pi(double x) {
+        // 1. Map to [0, 1) using truncate-and-subtract (use int64_t to prevent overflow)
+        double f = x - (double)((int)x);
+        if (f < 0.0) {f += 1.0;}
+        // 2. Map to [0, 0.5) and extract sign
+        double sign = 1.0;
+        if (f >= 0.5) {sign = -1.0;f -= 0.5;}
+        // 3. Map to [0, 0.25] (Symmetry around 0.25)
+        if (f > 0.25) {f = 0.5 - f;}
+        // 4. Remez Polynomial Evaluation (Odd powers only)
+        double f2 = f * f;
+        double p = f2 * -0.69093588239655204752473229179535744712019258849149 + 3.816997428325180431886496831784263511664844308953;
+        p = p * f2 - 15.094471616631987517150792141240583632857536104374;
+        p = p * f2 + 42.058688305389948652978636940879319419236423555816;
+        p = p * f2 - 76.705859647469529848428028740175591232140822775877;
+        p = p * f2 + 81.605249275026290026468387665436788455350446194769;
+        p = p * f2 - 41.341702240395082626913754855518082730586045930014;
+        p = p * f2 + 6.2831853071795803915351819993098437430793561832783;
+        p = p * f; // Multiply by x^1
+        return p * sign;
+    }
+
+    inline double cos2pi(double x) {
+        // 1. Map to [0, 1) using truncate-and-subtract
+        double f = x - (double)((int)x);
+        if (f < 0.0) {f += 1.0;}
+        // 2. Map to [0, 0.5] (Cosine is symmetric around 0.5)
+        if (f > 0.5) {f = 1.0 - f;}
+        // 3. Map to [0, 0.25] and extract sign
+        double sign = 1.0;
+        if (f > 0.25) {sign = -1.0;f = 0.5 - f;}
+        // 4. Remez Polynomial Evaluation (Even powers only)
+        double f2 = f * f;
+        double p = f2 * 0.2719476416639800139555005900627203625997526419121 - 1.7132188587562783227021022500030456711383616906867;
+        p = p * f2 + 7.9034625375924737942470808816341151858745136793854;
+        p = p * f2 - 26.426254069097002482358197039994768718882874895547;
+        p = p * f2 + 60.244641313230924425507669180781096172477629015917;
+        p = p * f2 - 85.456817205981735856122645737764931252180966287231;
+        p = p * f2 + 64.939394022663960757319625985316082107868087096872;
+        p = p * f2 - 19.739208802178707095137280041056835739350734071865;
+        p = p * f2 + 0.99999999999999999608981951072301324039762563006958;
+        return p * sign;
+    }
+
+#endif
+
 // Configurable vector size (in bytes)
 // 64 bytes = 512 bits, equivalent to AVX512
 // 32 bytes = 256 bits, equivalent to AVX
@@ -250,9 +338,9 @@ void generate_buffer(uint32_t N, FLOAT *real_buffer, FLOAT *imag_buffer) {
     for (uint32_t step = N; step > 1; step >>= 1) {
         uint32_t half_step = step >> 1;
         for (uint32_t j = 0; j < half_step; j++) {
-            FLOAT angle = -2.0 * j / step;
-            real_buffer[shift + j] = cospi(angle);
-            imag_buffer[shift + j] = - sinpi(angle);
+            FLOAT angle = - 1.0 * j / step;
+            real_buffer[shift + j] = M_COS2PI(angle);
+            imag_buffer[shift + j] = - M_SIN2PI(angle);
         }
         shift += half_step;
     }
