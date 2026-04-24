@@ -250,9 +250,9 @@ void generate_buffer(uint32_t N, FLOAT *real_buffer, FLOAT *imag_buffer) {
     for (uint32_t step = N; step > 1; step >>= 1) {
         uint32_t half_step = step >> 1;
         for (uint32_t j = 0; j < half_step; j++) {
-            FLOAT angle = -2.0 * M_PI * j / step;
-            real_buffer[shift + j] = cos(angle);
-            imag_buffer[shift + j] = - sin(angle);
+            FLOAT angle = -2.0 * j / step;
+            real_buffer[shift + j] = cospi(angle);
+            imag_buffer[shift + j] = - sinpi(angle);
         }
         shift += half_step;
     }
